@@ -30,6 +30,22 @@ During one request, failed channels are excluded while another candidate is
 available. If the whole configured route is exhausted, the existing retry
 budget may reuse the last route as a final attempt.
 
+## Routing observability
+
+Usage logs keep an admin-only `route_observation` summary alongside the
+existing `request_policy` events. It records the request ID, user ID, model,
+group, candidate and final channel IDs, retry index, switch count, result, and
+the SHA-256 fingerprint of the API key. Policy events also include the selected
+channel's priority and weight and the normalized error classification.
+
+Administrators can query the structured data with `GET /api/log/routing` using
+the existing time/model/token/group/channel filters plus `key_fp`,
+`classification`, and `result`. `GET /api/log/routing/health` returns success
+rate, average attempt latency, consecutive failures, the derived cooldown
+window, and the most recent switch time per channel. Both endpoints read
+existing logs and never return raw API keys, Authorization headers, upstream
+credentials, or request bodies.
+
 ## Proposed route-preview contract
 
 The planned management endpoint should be read-only and must not call an upstream provider. Given `group`, `model`, and the same request filters used by relay selection, it should return:
