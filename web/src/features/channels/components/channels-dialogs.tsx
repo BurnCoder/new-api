@@ -28,6 +28,7 @@ import { MultiKeyManageDialog } from './dialogs/multi-key-manage-dialog'
 import { OllamaModelsDialog } from './dialogs/ollama-models-dialog'
 import { TagBatchEditDialog } from './dialogs/tag-batch-edit-dialog'
 import { UpstreamUpdateDialog } from './dialogs/upstream-update-dialog'
+import { RoutingPreviewDialog } from './dialogs/routing-preview-dialog'
 import { ChannelMutateDrawer } from './drawers/channel-mutate-drawer'
 
 export function ChannelsDialogs() {
@@ -107,6 +108,11 @@ export function ChannelsDialogs() {
 
       {/* Upstream Model Update Dialog */}
       <UpstreamUpdateDialog upstream={upstream} />
+
+      <RoutingPreviewDialog
+        open={open === 'route-preview'}
+        onOpenChange={(v) => !v && setOpen(null)}
+      />
     </>
   )
 }

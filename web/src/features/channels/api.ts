@@ -40,6 +40,7 @@ import type {
   SearchChannelsParams,
   SearchChannelsResponse,
   TagOperationParams,
+  RoutingPreviewResponse,
 } from './types'
 
 const channelActionConfig = (
@@ -151,6 +152,16 @@ export async function getChannelOps(
     ...channelActionConfig(),
     params: autoBan === undefined ? undefined : { auto_ban: autoBan },
   })
+  return res.data
+}
+
+export async function getRoutingPreview(params: {
+  group: string
+  model: string
+  request_path?: string
+  responses_websocket?: boolean
+}): Promise<RoutingPreviewResponse> {
+  const res = await api.get('/api/channel/route-preview', { params })
   return res.data
 }
 

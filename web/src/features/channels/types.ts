@@ -190,6 +190,38 @@ export interface ChannelOpsResponse {
   }
 }
 
+export interface RoutingPreviewEntry {
+  channel_id: number
+  channel_name?: string
+  status?: number
+  weight: number
+  effective_weight: number
+  probability?: number
+  reason?: string
+}
+
+export interface RoutingPreviewTier {
+  priority: number
+  total_effective_weight: number
+  channels: RoutingPreviewEntry[]
+}
+
+export interface RoutingPreview {
+  group: string
+  model: string
+  strategy: string
+  source: 'memory_cache' | 'database' | string
+  tiers: RoutingPreviewTier[]
+  excluded?: RoutingPreviewEntry[]
+  unavailable_reason?: string
+}
+
+export interface RoutingPreviewResponse {
+  success: boolean
+  message?: string
+  data?: RoutingPreview
+}
+
 export interface ChannelTestResponse {
   success: boolean
   message?: string
