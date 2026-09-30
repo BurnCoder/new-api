@@ -23,16 +23,19 @@ type PolicyDecision struct {
 }
 
 type PolicyEvent struct {
-	Attempt     int            `json:"attempt"`
-	ChannelID   int            `json:"channel_id,omitempty"`
-	Group       string         `json:"group,omitempty"`
-	Rule        string         `json:"rule,omitempty"`
-	Status      int            `json:"status,omitempty"`
-	ErrorCode   string         `json:"error_code,omitempty"`
-	ErrorSource string         `json:"error_source,omitempty"`
-	ElapsedMS   int64          `json:"elapsed_ms"`
-	Decision    PolicyDecision `json:"decision"`
-	Health      string         `json:"health,omitempty"`
+	Attempt           int            `json:"attempt"`
+	RetryIndex        int            `json:"retry_index"`
+	ChannelID         int            `json:"channel_id,omitempty"`
+	PreviousChannelID int            `json:"previous_channel_id,omitempty"`
+	Group             string         `json:"group,omitempty"`
+	Rule              string         `json:"rule,omitempty"`
+	Status            int            `json:"status,omitempty"`
+	ErrorCode         string         `json:"error_code,omitempty"`
+	Classification    string         `json:"classification,omitempty"`
+	ErrorSource       string         `json:"error_source,omitempty"`
+	ElapsedMS         int64          `json:"elapsed_ms"`
+	Decision          PolicyDecision `json:"decision"`
+	Health            string         `json:"health,omitempty"`
 }
 
 // RequestPolicyState records how one request was routed so administrators can
@@ -48,6 +51,7 @@ type RequestPolicyState struct {
 	RuleName          string
 	Successful        bool
 	OutcomeRecorded   bool
+	LastChannelID     int
 	mu                sync.Mutex
 	events            []PolicyEvent
 }
@@ -87,11 +91,13 @@ func (s *RequestPolicyState) Events() []PolicyEvent {
 }
 
 func (s *RequestPolicyState) BeginAttempt(channel *model.Channel, group string) {
+	previousChannelID := s.LastChannelID
 	s.Attempts++
 	s.Successful = false
 	s.OutcomeRecorded = false
 	s.SelectedGroup = group
-	s.AddEvent(PolicyEvent{ChannelID: channel.Id, Decision: PolicyDecision{Action: "attempt", Reason: "channel_selected", Source: "routing"}})
+	s.AddEvent(PolicyEvent{RetryIndex: s.Attempts - 1, ChannelID: channel.Id, PreviousChannelID: previousChannelID, Decision: PolicyDecision{Action: "attempt", Reason: "channel_selected", Source: "routing"}})
+	s.LastChannelID = channel.Id
 }
 
 // RecordPolicyFailure appends the failed attempt and the retry decision made
@@ -111,7 +117,7 @@ func RecordPolicyFailure(c *gin.Context, channelID int, err *types.NewAPIError, 
 		source = "local"
 	}
 	state := RequestPolicy(c)
-	event := PolicyEvent{ChannelID: channelID, Status: err.StatusCode, ErrorCode: string(err.GetErrorCode()), ErrorSource: source, Decision: PolicyDecision{Action: "failure", Reason: "upstream_failure", Source: source}}
+	event := PolicyEvent{RetryIndex: max(0, state.Attempts-1), ChannelID: channelID, PreviousChannelID: channelID, Status: err.StatusCode, ErrorCode: string(err.GetErrorCode()), Classification: string(ClassifyRelayError(err)), ErrorSource: source, Decision: PolicyDecision{Action: "failure", Reason: "upstream_failure", Source: source}}
 	if source == "local" {
 		event.Decision.Reason = "local_rejection"
 	}

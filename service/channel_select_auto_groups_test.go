@@ -127,3 +127,26 @@ func TestCacheGetRandomSatisfiedChannelUsesTokenAutoGroupsWhenGlobalAutoIsEmpty(
 	assert.Equal(t, "default", selectedGroup)
 	assert.Equal(t, "default", common.GetContextKeyString(ctx, constant.ContextKeyAutoGroup))
 }
+
+func TestCacheGetRandomSatisfiedChannelSkipsFailedChannel(t *testing.T) {
+	db := setupChannelSelectAutoGroupsTest(t)
+	const modelName = "retry-exclusion-model"
+	createChannelSelectAutoGroupsChannel(t, db, 2201, "default", modelName)
+	createChannelSelectAutoGroupsChannel(t, db, 2202, "default", modelName)
+	model.InitChannelCache()
+	common.RetryTimes = 1
+
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	retry := 0
+	param := &RetryParam{Ctx: ctx, TokenGroup: "default", ModelName: modelName, Retry: &retry}
+	first, _, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, first)
+	param.MarkChannelFailed(first.Id)
+	param.IncreaseRetry()
+
+	second, _, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, second)
+	assert.NotEqual(t, first.Id, second.Id, "a retry must choose an unfailed channel while one remains")
+}

@@ -22,6 +22,14 @@ Channel selection alone does not decide whether a retry is safe. The relay retry
 
 Every retry should preserve the request ID and record the previous channel, retry index, error classification, and selected next channel. A retry must not silently replay a consumed request body or expose upstream credentials in logs.
 
+The shared relay policy classifies failures as `retryable`, `non_retryable`,
+`cooldown`, or `manual`. Rate limits and temporary 5xx responses are marked
+`cooldown`; authentication, invalid-request, model, quota, and explicit
+skip-retry failures are `manual`/`non_retryable` and do not switch channels.
+During one request, failed channels are excluded while another candidate is
+available. If the whole configured route is exhausted, the existing retry
+budget may reuse the last route as a final attempt.
+
 ## Proposed route-preview contract
 
 The planned management endpoint should be read-only and must not call an upstream provider. Given `group`, `model`, and the same request filters used by relay selection, it should return:
