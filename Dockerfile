@@ -1,14 +1,15 @@
-FROM oven/bun:1.4.0@sha256:5ff609364c049b54eb0ff560ec96319729a972078ef2c755d758f0c6ef89c2d6 AS builder
+# Use the domestic DaoCloud Docker Hub mirror for build-time base images.
+FROM docker.m.daocloud.io/oven/bun:1.4.0@sha256:5ff609364c049b54eb0ff560ec96319729a972078ef2c755d758f0c6ef89c2d6 AS builder
 
 WORKDIR /build/web
 COPY web/package.json web/bun.lock ./
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile --registry https://registry.npmmirror.com
 COPY ./web ./
 COPY ./VERSION /build/VERSION
 RUN DISABLE_ESLINT_PLUGIN='true' VITE_REACT_APP_VERSION=$(cat /build/VERSION) bun run build
 
-FROM golang:1.26.1-alpine@sha256:2389ebfa5b7f43eeafbd6be0c3700cc46690ef842ad962f6c5bd6be49ed82039 AS builder2
-ENV GO111MODULE=on CGO_ENABLED=0 GOWORK=off
+FROM docker.m.daocloud.io/library/golang:1.26.1-alpine@sha256:2389ebfa5b7f43eeafbd6be0c3700cc46690ef842ad962f6c5bd6be49ed82039 AS builder2
+ENV GO111MODULE=on CGO_ENABLED=0 GOWORK=off GOPROXY=https://goproxy.cn,direct
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -27,9 +28,10 @@ COPY . .
 COPY --from=builder /build/web/dist ./web/dist
 RUN go build -ldflags "-s -w -X 'github.com/QuantumNous/new-api/common.Version=$(cat VERSION)'" -o new-api
 
-FROM debian:bookworm-slim@sha256:f06537653ac770703bc45b4b113475bd402f451e85223f0f2837acbf89ab020a
+FROM docker.m.daocloud.io/library/debian:bookworm-slim@sha256:f06537653ac770703bc45b4b113475bd402f451e85223f0f2837acbf89ab020a
 
-RUN apt-get update \
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates tzdata libasan8 wget \
     && rm -rf /var/lib/apt/lists/* \
     && update-ca-certificates
