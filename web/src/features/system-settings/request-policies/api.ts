@@ -7,11 +7,16 @@ export type PolicyConfig = {
 export type PolicyDecision = { action: string; reason: string; source: string }
 export type PolicyEvent = {
   attempt: number
+  retry_index?: number
   channel_id?: number
+  previous_channel_id?: number
+  priority?: number
+  weight?: number
   group?: string
   rule?: string
   status?: number
   error_code?: string
+  classification?: string
   error_source?: string
   elapsed_ms: number
   decision: PolicyDecision

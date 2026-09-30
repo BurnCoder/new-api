@@ -32,12 +32,17 @@ export function PolicyDecisionRecord(props: {
             {event.channel_id
               ? ` · ${props.channelNames?.[event.channel_id] ?? `#${event.channel_id}`}`
               : ''}
+            {event.priority !== undefined ? ` · P${event.priority}` : ''}
+            {event.weight !== undefined ? ` · W${event.weight}` : ''}
             {event.status && event.decision.action === 'failure'
               ? ` · HTTP ${event.status}`
               : ''}
           </p>
           <p className='text-muted-foreground text-xs break-words'>
             {event.attempt > 0 ? `${t('Attempt')} ${event.attempt} · ` : ''}
+            {event.retry_index !== undefined
+              ? `Retry ${event.retry_index} · `
+              : ''}
             {event.elapsed_ms} ms
             {event.group ? ` · ${event.group}` : ''}
             {event.rule ? ` · ${event.rule}` : ''}
@@ -45,6 +50,7 @@ export function PolicyDecisionRecord(props: {
           </p>
           <p className='text-muted-foreground text-xs'>
             {t('Source')}: {policyLabel(t, event.decision.source)}
+            {event.classification ? ` · ${event.classification}` : ''}
             {event.health ? ` · ${policyLabel(t, event.health)}` : ''}
           </p>
         </li>

@@ -154,3 +154,55 @@ func GetLogsSelfStat(c *gin.Context) {
 	})
 	return
 }
+
+func routingObservationQuery(c *gin.Context) model.RoutingObservationQuery {
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	channelID, _ := strconv.Atoi(c.Query("channel"))
+	return model.RoutingObservationQuery{
+		StartTimestamp: startTimestamp,
+		EndTimestamp:   endTimestamp,
+		ModelName:      c.Query("model_name"),
+		TokenName:      c.Query("token_name"),
+		KeyFingerprint: c.Query("key_fp"),
+		ChannelID:      channelID,
+		Group:          c.Query("group"),
+		Classification: c.Query("classification"),
+		Result:         c.Query("result"),
+	}
+}
+
+// GetRoutingObservations exposes the redacted request-level routing chain for
+// administrators. It reads existing usage logs and never returns bearer keys
+// or request bodies; key_fp is a one-way token fingerprint.
+func GetRoutingObservations(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	result, err := model.GetRoutingObservations(routingObservationQuery(c), pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(result.Total))
+	pageInfo.SetItems(result.Items)
+	common.ApiSuccess(c, pageInfo)
+}
+
+// GetRoutingHealth returns success, latency, failure streak and cooldown
+// summaries derived from the same routing observations. The bounded read is
+// intentionally separate from request handling, so it cannot add a write to
+// the relay hot path.
+func GetRoutingHealth(c *gin.Context) {
+	result, err := model.GetRoutingObservations(routingObservationQuery(c), 0, 10000)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data": gin.H{
+			"items":        model.SummarizeRoutingHealth(result.Items, common.GetTimestamp()),
+			"observations": result.Total,
+		},
+	})
+}

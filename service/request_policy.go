@@ -27,6 +27,8 @@ type PolicyEvent struct {
 	RetryIndex        int            `json:"retry_index"`
 	ChannelID         int            `json:"channel_id,omitempty"`
 	PreviousChannelID int            `json:"previous_channel_id,omitempty"`
+	Priority          int64          `json:"priority,omitempty"`
+	Weight            int            `json:"weight,omitempty"`
 	Group             string         `json:"group,omitempty"`
 	Rule              string         `json:"rule,omitempty"`
 	Status            int            `json:"status,omitempty"`
@@ -42,18 +44,68 @@ type PolicyEvent struct {
 // read the decision flow in the log details. Channel selection and the retry
 // decision stay in the relay flows; this state only records them.
 type RequestPolicyState struct {
-	FinalLogged       bool
-	StartedAt         time.Time
-	Attempts          int
-	SelectedGroup     string
-	SessionMode       string
-	SessionModeSource string
-	RuleName          string
-	Successful        bool
-	OutcomeRecorded   bool
-	LastChannelID     int
-	mu                sync.Mutex
-	events            []PolicyEvent
+	FinalLogged        bool
+	StartedAt          time.Time
+	Attempts           int
+	SelectedGroup      string
+	SessionMode        string
+	SessionModeSource  string
+	RuleName           string
+	Successful         bool
+	OutcomeRecorded    bool
+	LastChannelID      int
+	CandidateChannels  []int
+	LastClassification RetryClassification
+	mu                 sync.Mutex
+	events             []PolicyEvent
+}
+
+// RoutingObservation returns the redacted, request-level routing summary that
+// is embedded in admin usage logs. It deliberately contains only identifiers
+// and a one-way key fingerprint; bearer credentials and request bodies never
+// enter the observation.
+func (s *RequestPolicyState) RoutingObservation(c *gin.Context, modelName string) map[string]any {
+	if s == nil {
+		return nil
+	}
+	result := "failed"
+	if s.Successful {
+		result = "success"
+	}
+	finalChannelID := s.LastChannelID
+	requestID, userID, keyFingerprint, usingGroupFromContext := "", 0, "", ""
+	if c != nil {
+		if c.GetInt("channel_id") > 0 {
+			finalChannelID = c.GetInt("channel_id")
+		}
+		requestID = c.GetString(common.RequestIdKey)
+		userID = c.GetInt("id")
+		keyFingerprint = model.AccessTokenFingerprint(c.GetString("token_key"))
+		usingGroupFromContext = common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+	}
+	usingGroup := s.SelectedGroup
+	if usingGroup == "" {
+		usingGroup = usingGroupFromContext
+	}
+	if modelName == "" && c != nil {
+		modelName = c.GetString("original_model")
+	}
+	observation := map[string]any{
+		"request_id":            requestID,
+		"user_id":               userID,
+		"key_fp":                keyFingerprint,
+		"model":                 modelName,
+		"group":                 usingGroup,
+		"candidate_channel_ids": slices.Clone(s.CandidateChannels),
+		"final_channel_id":      finalChannelID,
+		"retry_index":           max(0, s.Attempts-1),
+		"switch_count":          max(0, len(s.CandidateChannels)-1),
+		"result":                result,
+	}
+	if s.LastClassification != "" {
+		observation["classification"] = string(s.LastClassification)
+	}
+	return observation
 }
 
 func RequestPolicy(c *gin.Context) *RequestPolicyState {
@@ -96,8 +148,16 @@ func (s *RequestPolicyState) BeginAttempt(channel *model.Channel, group string) 
 	s.Successful = false
 	s.OutcomeRecorded = false
 	s.SelectedGroup = group
-	s.AddEvent(PolicyEvent{RetryIndex: s.Attempts - 1, ChannelID: channel.Id, PreviousChannelID: previousChannelID, Decision: PolicyDecision{Action: "attempt", Reason: "channel_selected", Source: "routing"}})
-	s.LastChannelID = channel.Id
+	if channel != nil && !slices.Contains(s.CandidateChannels, channel.Id) {
+		s.CandidateChannels = append(s.CandidateChannels, channel.Id)
+	}
+	channelID, priority, weight := 0, int64(0), 0
+	if channel != nil {
+		channelID, priority, weight = channel.Id, channel.GetPriority(), channel.GetWeight()
+	}
+	event := PolicyEvent{RetryIndex: s.Attempts - 1, ChannelID: channelID, PreviousChannelID: previousChannelID, Priority: priority, Weight: weight, Decision: PolicyDecision{Action: "attempt", Reason: "channel_selected", Source: "routing"}}
+	s.AddEvent(event)
+	s.LastChannelID = channelID
 }
 
 // RecordPolicyFailure appends the failed attempt and the retry decision made
@@ -117,7 +177,15 @@ func RecordPolicyFailure(c *gin.Context, channelID int, err *types.NewAPIError, 
 		source = "local"
 	}
 	state := RequestPolicy(c)
-	event := PolicyEvent{RetryIndex: max(0, state.Attempts-1), ChannelID: channelID, PreviousChannelID: channelID, Status: err.StatusCode, ErrorCode: string(err.GetErrorCode()), Classification: string(ClassifyRelayError(err)), ErrorSource: source, Decision: PolicyDecision{Action: "failure", Reason: "upstream_failure", Source: source}}
+	classification := ClassifyRelayError(err)
+	state.LastClassification = classification
+	priority, weight := int64(0), 0
+	if model.DB != nil {
+		if channel, channelErr := model.CacheGetChannel(channelID); channelErr == nil && channel != nil {
+			priority, weight = channel.GetPriority(), channel.GetWeight()
+		}
+	}
+	event := PolicyEvent{RetryIndex: max(0, state.Attempts-1), ChannelID: channelID, PreviousChannelID: channelID, Priority: priority, Weight: weight, Status: err.StatusCode, ErrorCode: string(err.GetErrorCode()), Classification: string(classification), ErrorSource: source, Decision: PolicyDecision{Action: "failure", Reason: "upstream_failure", Source: source}}
 	if source == "local" {
 		event.Decision.Reason = "local_rejection"
 	}

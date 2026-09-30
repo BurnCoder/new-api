@@ -798,6 +798,46 @@ export function DetailsDialog(props: DetailsDialogProps) {
             <PolicyDecisionRecord events={adminInfo.request_policy} />
           </DetailSection>
         ) : null}
+        {props.isAdmin && adminInfo?.route_observation ? (
+          <DetailSection
+            label={t('Routing observation')}
+            icon={<Route className='size-4' />}
+          >
+            <div className='space-y-1 text-xs'>
+              <DetailRow
+                label={t('Result')}
+                value={adminInfo.route_observation.result ?? ''}
+              />
+              <DetailRow
+                label={t('Key fingerprint')}
+                value={adminInfo.route_observation.key_fp ?? ''}
+                mono
+              />
+              <DetailRow
+                label={t('Candidate channels')}
+                value={(
+                  adminInfo.route_observation.candidate_channel_ids ?? []
+                )
+                  .map((id) => `#${id}`)
+                  .join(' → ')}
+                mono
+              />
+              <DetailRow
+                label={t('Final channel')}
+                value={String(
+                  adminInfo.route_observation.final_channel_id ?? ''
+                )}
+                mono
+              />
+              {adminInfo.route_observation.classification && (
+                <DetailRow
+                  label={t('Error classification')}
+                  value={adminInfo.route_observation.classification}
+                />
+              )}
+            </div>
+          </DetailSection>
+        ) : null}
         {props.isAdmin && other?.admin_info?.quota_saturation && (
           <DetailSection
             icon={<AlertTriangle className='size-3.5' aria-hidden='true' />}

@@ -117,6 +117,19 @@ export interface ToolSurchargeItem {
 export interface LogOtherData {
   admin_info?: {
     request_policy?: PolicyEvent[]
+    route_observation?: {
+      request_id?: string
+      user_id?: number
+      key_fp?: string
+      model?: string
+      group?: string
+      candidate_channel_ids?: number[]
+      final_channel_id?: number
+      retry_index?: number
+      switch_count?: number
+      result?: 'success' | 'failed' | string
+      classification?: string
+    }
     is_multi_key?: boolean
     multi_key_index?: number
     use_channel?: number[]
@@ -461,6 +474,46 @@ export interface GetLogStatsResponse {
   success: boolean
   message?: string
   data?: LogStatistics
+}
+
+export interface RoutingObservationQuery {
+  p?: number
+  page_size?: number
+  start_timestamp?: number
+  end_timestamp?: number
+  model_name?: string
+  token_name?: string
+  key_fp?: string
+  channel?: number
+  group?: string
+  classification?: string
+  result?: string
+}
+
+export interface RoutingObservationItem {
+  log_id: number
+  created_at: number
+  request_id: string
+  user_id: number
+  username: string
+  token_name: string
+  model_name: string
+  group: string
+  channel_id: number
+  observation: Record<string, unknown>
+  policy_events?: PolicyEvent[]
+}
+
+export interface RoutingHealthStat {
+  channel_id: number
+  attempts: number
+  successes: number
+  failures: number
+  success_rate: number
+  average_latency_ms: number
+  consecutive_failures: number
+  cooldown_until: number
+  last_switch_at: number
 }
 
 // ============================================================================

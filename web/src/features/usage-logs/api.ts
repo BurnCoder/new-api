@@ -29,6 +29,9 @@ import type {
   GetTaskLogsParams,
   TaskArtifactsResponse,
   UserInfo,
+  RoutingObservationQuery,
+  RoutingObservationItem,
+  RoutingHealthStat,
 } from './types'
 
 // ============================================================================
@@ -85,6 +88,28 @@ export const getLogStats = (params: GetLogStatsParams = {}) =>
 export const getUserLogStats = (
   params: Omit<GetLogStatsParams, 'username' | 'channel'> = {}
 ) => fetchLogStats('/api/log', params, false)
+
+export async function getRoutingObservations(
+  params: RoutingObservationQuery = {}
+): Promise<{
+  success: boolean
+  data?: { items: RoutingObservationItem[]; total: number }
+}> {
+  const queryParams = buildQueryParams({ p: 1, page_size: 50, ...params })
+  const res = await api.get(`/api/log/routing?${queryParams}`)
+  return res.data
+}
+
+export async function getRoutingHealth(
+  params: Omit<RoutingObservationQuery, 'p' | 'page_size'> = {}
+): Promise<{
+  success: boolean
+  data?: { items: RoutingHealthStat[]; observations: number }
+}> {
+  const queryParams = buildQueryParams(params)
+  const res = await api.get(`/api/log/routing/health?${queryParams}`)
+  return res.data
+}
 
 export async function getUserInfo(
   userId: number
