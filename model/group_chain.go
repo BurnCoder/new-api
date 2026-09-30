@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -16,6 +17,26 @@ const (
 	// GroupChainMaxPerUser matches the reference product's visible 1/10 limit.
 	GroupChainMaxPerUser = 10
 )
+
+const groupChainValuePrefix = "chain:"
+
+// GroupChainValue is the value stored in Token.Group when a token references
+// a reusable chain instead of a single group or the legacy "auto" mode.
+func GroupChainValue(id int) string {
+	return fmt.Sprintf("%s%d", groupChainValuePrefix, id)
+}
+
+func ParseGroupChainValue(value string) (int, bool) {
+	if !strings.HasPrefix(value, groupChainValuePrefix) {
+		return 0, false
+	}
+	id := strings.TrimPrefix(value, groupChainValuePrefix)
+	parsed, err := strconv.Atoi(id)
+	if err != nil || parsed <= 0 {
+		return 0, false
+	}
+	return parsed, true
+}
 
 // GroupChain is a reusable, ordered fallback policy for a user's API keys.
 // Groups stores stable group names in order. Token binding is deliberately
@@ -95,6 +116,14 @@ func IsGroupChainNameDuplicated(userID, id int, name string) (bool, error) {
 func CountUserGroupChains(userID int) (int64, error) {
 	var count int64
 	err := DB.Model(&GroupChain{}).Where("user_id = ?", userID).Count(&count).Error
+	return count, err
+}
+
+func CountUserTokensByGroup(userID int, group string) (int64, error) {
+	var count int64
+	err := DB.Model(&Token{}).
+		Where(map[string]any{"user_id": userID, "group": group}).
+		Count(&count).Error
 	return count, err
 }
 

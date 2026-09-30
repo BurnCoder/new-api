@@ -39,3 +39,14 @@ func TestGroupChainSetAndGetGroups(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"vip", "default"}, groups)
 }
+
+func TestGroupChainValueParsingIsStrict(t *testing.T) {
+	validID, valid := ParseGroupChainValue(GroupChainValue(42))
+	require.True(t, valid)
+	require.Equal(t, 42, validID)
+
+	for _, value := range []string{"chain:", "chain:0", "chain:-1", "chain:42x", "group:42"} {
+		_, ok := ParseGroupChainValue(value)
+		require.False(t, ok, value)
+	}
+}

@@ -25,6 +25,8 @@ import type {
   GetApiKeysResponse,
   SearchApiKeysParams,
   ApiKeyFormData,
+  GroupChain,
+  GroupChainsResponse,
   TokenAutoGroupsConfig,
 } from './types'
 
@@ -66,6 +68,39 @@ export async function getTokenAutoGroups(): Promise<
   ApiResponse<TokenAutoGroupsConfig>
 > {
   const res = await api.get('/api/token/auto-groups')
+  return res.data
+}
+
+// Get reusable group chains owned by the current user.
+export async function getGroupChains(): Promise<
+  ApiResponse<GroupChainsResponse>
+> {
+  const res = await api.get('/api/user/group_chains')
+  return res.data
+}
+
+// Create a reusable group chain.
+export async function createGroupChain(data: {
+  name: string
+  groups: string[]
+}): Promise<ApiResponse<GroupChain>> {
+  const res = await api.post('/api/user/group_chains', data)
+  return res.data
+}
+
+// Update a reusable group chain. Existing API keys bound to it use the new
+// name/order immediately because the key stores only the chain id.
+export async function updateGroupChain(
+  id: number,
+  data: { name: string; groups: string[] }
+): Promise<ApiResponse<GroupChain>> {
+  const res = await api.put(`/api/user/group_chains/${id}`, data)
+  return res.data
+}
+
+// Delete a reusable group chain.
+export async function deleteGroupChain(id: number): Promise<ApiResponse> {
+  const res = await api.delete(`/api/user/group_chains/${id}`)
   return res.data
 }
 

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -23,6 +24,7 @@ type groupChainResponse struct {
 	UserId      int      `json:"user_id"`
 	Name        string   `json:"name"`
 	Groups      []string `json:"groups"`
+	TokenCount  int64    `json:"token_count"`
 	CreatedTime int64    `json:"created_time"`
 	UpdatedTime int64    `json:"updated_time"`
 }
@@ -32,13 +34,21 @@ func toGroupChainResponse(chain *model.GroupChain) (*groupChainResponse, error) 
 	if err != nil {
 		return nil, err
 	}
+	tokenCount, err := model.CountUserTokensByGroup(chain.UserId, model.GroupChainValue(chain.Id))
+	if err != nil {
+		return nil, err
+	}
 	return &groupChainResponse{
 		Id: chain.Id, UserId: chain.UserId, Name: chain.Name, Groups: groups,
+		TokenCount:  tokenCount,
 		CreatedTime: chain.CreatedTime, UpdatedTime: chain.UpdatedTime,
 	}, nil
 }
 
 func getGroupChainUserGroup(c *gin.Context) (string, error) {
+	if group := common.GetContextKeyString(c, constant.ContextKeyUserGroup); group != "" {
+		return group, nil
+	}
 	if group := c.GetString("group"); group != "" {
 		return group, nil
 	}
