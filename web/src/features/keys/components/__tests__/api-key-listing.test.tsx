@@ -306,6 +306,25 @@ function KeysPage() {
 async function renderKeysPage(status = 1, overrides: Partial<ApiKey> = {}) {
   let currentKey = { ...key, status, ...overrides }
   vi.mocked(api.get).mockImplementation(async (url) => {
+    if (url === '/api/token/auto-groups') {
+      return {
+        data: {
+          success: true,
+          data: {
+            groups: ['default'],
+            max_count: 5,
+            chains: [
+              {
+                id: 2,
+                name: 'test2',
+                value: 'chain:2',
+                groups: ['default'],
+              },
+            ],
+          },
+        },
+      }
+    }
     if (url.startsWith('/api/token/')) {
       return {
         data: { success: true, data: { items: [currentKey], total: 1 } },
@@ -366,6 +385,12 @@ it('combines creation and last use while keeping expiry, models and IP restricti
   })
   expect(quotaHeader).not.toHaveClass('pr-8')
   expect(quotaTrigger.closest('td')).not.toHaveClass('pr-8')
+})
+
+it('shows the saved group chain name in the API key list', async () => {
+  await renderKeysPage(1, { group: 'chain:2' })
+  expect(await screen.findByText('test2')).toBeInTheDocument()
+  expect(screen.queryByText('chain:2')).not.toBeInTheDocument()
 })
 
 it('restores dates hidden by the old default and preserves unrelated column preferences', async () => {

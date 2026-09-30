@@ -33,6 +33,7 @@ import { GroupRatioBadge, type GroupRatio } from './auto-group-visuals'
 
 type ApiKeyGroupCellProps = {
   crossGroupRetry: boolean
+  displayGroup?: string
   group: string
   ratio?: GroupRatio
   shouldReduceMotion: boolean
@@ -43,6 +44,7 @@ export function ApiKeyGroupCell(props: ApiKeyGroupCellProps) {
   const isMobile = useMediaQuery('(max-width: 640px)')
 
   const group = props.group?.trim() || ''
+  const displayGroup = props.displayGroup?.trim() || group
   if (group !== 'auto') {
     const ratio =
       group && typeof props.ratio === 'number' ? props.ratio : undefined
@@ -50,11 +52,12 @@ export function ApiKeyGroupCell(props: ApiKeyGroupCellProps) {
       <TruncatedCell
         className={isMobile ? 'w-full' : 'max-w-50'}
         tabIndex={0}
-        tooltipContent={group || t('Follow user group')}
+        tooltipContent={displayGroup || t('Follow user group')}
         tooltipClassName='break-all'
       >
         <GroupBadge
-          group={group}
+          group={displayGroup}
+          label={props.displayGroup?.trim()}
           ratio={ratio}
           ratioLabel={group ? undefined : t('Inherited')}
           className='px-0'

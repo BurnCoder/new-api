@@ -42,6 +42,7 @@ await i18n.use(initReactI18next).init({
 })
 
 function CellHarness(props: {
+  displayGroup?: string
   group: string
   ratio?: number | string
   crossGroupRetry?: boolean
@@ -51,6 +52,7 @@ function CellHarness(props: {
     <I18nextProvider i18n={i18n}>
       <TooltipProvider>
         <ApiKeyGroupCell
+          displayGroup={props.displayGroup}
           group={props.group}
           ratio={props.ratio}
           crossGroupRetry={props.crossGroupRetry ?? false}
@@ -156,5 +158,24 @@ describe('API key group table cell', () => {
     expect(screen.getByText('vip')).toBeInTheDocument()
     expect(screen.queryByText('Auto')).not.toBeInTheDocument()
     expect(screen.queryByText('自动')).not.toBeInTheDocument()
+  })
+
+  test('shows a group chain name while keeping the internal chain value for behavior', () => {
+    render(<CellHarness group='chain:2' displayGroup='test2' ratio={1.5} />)
+    expect(screen.getByText('test2')).toBeInTheDocument()
+    expect(screen.queryByText('chain:2')).not.toBeInTheDocument()
+    expect(screen.getByText('1.5x')).toBeInTheDocument()
+  })
+
+  test('preserves a chain named auto instead of translating it as the system Auto group', () => {
+    render(<CellHarness group='chain:2' displayGroup='auto' />)
+    expect(screen.getByText('auto', { exact: true })).toBeInTheDocument()
+    expect(screen.queryByText('Auto', { exact: true })).not.toBeInTheDocument()
+  })
+
+  test('keeps the stored chain reference visible when its name is unavailable', () => {
+    render(<CellHarness group='chain:99' />)
+    expect(screen.getByText('chain:99')).toBeInTheDocument()
+    expect(screen.queryByText('Inherited')).not.toBeInTheDocument()
   })
 })
