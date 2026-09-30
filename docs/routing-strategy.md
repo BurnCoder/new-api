@@ -45,6 +45,17 @@ The planned management endpoint should be read-only and must not call an upstrea
 
 The response should also explain why a channel was filtered (disabled, model mismatch, group mismatch, affinity, or request constraint). It must redact API keys and proxy credentials.
 
+The management endpoint is now available as:
+
+```text
+GET /api/channel/route-preview?group=default&model=gpt-example
+```
+
+`request_path` and `responses_websocket=true` can be supplied to apply the
+same request filters used by relay selection. The endpoint requires channel
+read permission, returns the cache or database source used for the snapshot,
+and never calls an upstream provider.
+
 ## Consistency requirements
 
 The in-memory cache and database fallback must produce the same priority tiers and candidate filtering for the same configuration. Changes to channel priority, weight, model mapping, or status must invalidate the routing cache before the next request can observe stale data. A route preview should use the same selection predicate as a live request so that the preview is useful for incident analysis.

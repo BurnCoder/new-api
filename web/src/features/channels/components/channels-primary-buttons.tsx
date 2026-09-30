@@ -29,6 +29,7 @@ import {
   SortAsc,
   RefreshCw,
   ArrowUpFromLine,
+  Route,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -169,6 +170,20 @@ export function ChannelsPrimaryButtons() {
               {t('No permission to perform this action')}
             </TooltipContent>
           )}
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger render={<span className='inline-flex' />}>
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={() => setOpen('route-preview')}
+            >
+              <Route className='h-4 w-4' />
+              <span className='max-sm:hidden'>{t('Route Preview')}</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t('Preview channel routing')}</TooltipContent>
         </Tooltip>
 
         {/* More Actions */}
