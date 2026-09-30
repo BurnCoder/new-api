@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -42,12 +43,13 @@ func AppendTaskPluginIdentityFilter(c *gin.Context, pluginKey string) {
 }
 
 type RetryParam struct {
-	Ctx          *gin.Context
-	TokenGroup   string
-	ModelName    string
-	RequestPath  string
-	Retry        *int
-	resetNextTry bool
+	Ctx            *gin.Context
+	TokenGroup     string
+	ModelName      string
+	RequestPath    string
+	Retry          *int
+	FailedChannels map[int]struct{}
+	resetNextTry   bool
 }
 
 func (p *RetryParam) GetRetry() int {
@@ -74,6 +76,56 @@ func (p *RetryParam) IncreaseRetry() {
 
 func (p *RetryParam) ResetRetryNextTry() {
 	p.resetNextTry = true
+}
+
+// MarkChannelFailed prevents a retry of a channel that already failed during
+// this request. The set is request-local and is intentionally not persisted.
+func (p *RetryParam) MarkChannelFailed(channelID int) {
+	if p == nil || channelID <= 0 {
+		return
+	}
+	if p.FailedChannels == nil {
+		p.FailedChannels = make(map[int]struct{})
+	}
+	p.FailedChannels[channelID] = struct{}{}
+}
+
+func (p *RetryParam) selectionFilters(c *gin.Context) []dto.ChannelFilter {
+	filters := append([]dto.ChannelFilter(nil), GetChannelConstraints(c).Filters...)
+	if len(p.FailedChannels) == 0 {
+		return filters
+	}
+	ids := make([]int, 0, len(p.FailedChannels))
+	for id := range p.FailedChannels {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	return append(filters, dto.ChannelFilter{Kind: dto.FilterExcludedChannels, ExcludedChannelIDs: ids})
+}
+
+func (p *RetryParam) baseFilters(c *gin.Context) []dto.ChannelFilter {
+	return append([]dto.ChannelFilter(nil), GetChannelConstraints(c).Filters...)
+}
+
+// getRandomSatisfiedChannel keeps the retry priority order while avoiding
+// channels that already failed in this request. When the current priority is
+// exhausted, it probes the remaining retry priorities before reporting that
+// the route is exhausted. The caller may then apply the legacy final retry
+// fallback only when there is no unfailed candidate left in the route.
+func getRandomSatisfiedChannel(group, modelName string, retry int, filters []dto.ChannelFilter, baseFilters []dto.ChannelFilter, failed map[int]struct{}) (*model.Channel, error) {
+	channel, err := model.GetRandomSatisfiedChannel(group, modelName, retry, filters)
+	if channel != nil || err != nil || len(failed) == 0 {
+		return channel, err
+	}
+	for probe := retry + 1; probe <= common.RetryTimes; probe++ {
+		channel, err = model.GetRandomSatisfiedChannel(group, modelName, probe, filters)
+		if channel != nil || err != nil {
+			return channel, err
+		}
+	}
+	// All configured priority layers are filtered out. Reuse a channel only as
+	// the compatibility behavior for a completely exhausted route.
+	return model.GetRandomSatisfiedChannel(group, modelName, retry, baseFilters)
 }
 
 // CacheGetRandomSatisfiedChannel tries to get a random channel that satisfies the requirements.
@@ -116,7 +168,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 	var err error
 	selectGroup := param.TokenGroup
 	userGroup := common.GetContextKeyString(param.Ctx, constant.ContextKeyUserGroup)
-	filters := GetChannelConstraints(param.Ctx).Filters
+	filters := param.selectionFilters(param.Ctx)
 
 	if param.TokenGroup == "auto" {
 		autoGroups := GetRequestAutoGroups(param.Ctx, userGroup)
@@ -147,11 +199,13 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			}
 			logger.LogDebug(param.Ctx, "Auto selecting group: %s, priorityRetry: %d", autoGroup, priorityRetry)
 
-			channel, _ = model.GetRandomSatisfiedChannel(
+			channel, _ = getRandomSatisfiedChannel(
 				autoGroup,
 				param.ModelName,
 				priorityRetry,
 				filters,
+				param.baseFilters(param.Ctx),
+				param.FailedChannels,
 			)
 			if channel == nil {
 				// Current group has no available channel for this model, try next group
@@ -190,11 +244,13 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			break
 		}
 	} else {
-		channel, err = model.GetRandomSatisfiedChannel(
+		channel, err = getRandomSatisfiedChannel(
 			param.TokenGroup,
 			param.ModelName,
 			param.GetRetry(),
 			filters,
+			param.baseFilters(param.Ctx),
+			param.FailedChannels,
 		)
 		if err != nil {
 			return nil, param.TokenGroup, err

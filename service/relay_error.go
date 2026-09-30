@@ -45,6 +45,10 @@ func DecideRelayRetry(c *gin.Context, err *types.NewAPIError, retryTimes int) Po
 	if code >= 200 && code < 300 {
 		return PolicyDecision{Action: "stop", Reason: "system_retry_exclusion", Source: "system"}
 	}
+	classification := ClassifyRelayError(err)
+	if classification == RetryClassificationManual {
+		return PolicyDecision{Action: "stop", Reason: "status_not_retryable", Source: "global"}
+	}
 	if code < 100 || code > 599 {
 		return PolicyDecision{Action: "retry", Reason: "unrecognized_status", Source: "system"}
 	}

@@ -207,6 +207,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		decision := service.DecideRelayRetry(c, newAPIError, common.RetryTimes-retryParam.GetRetry())
 		service.RecordPolicyFailure(c, channel.Id, newAPIError, decision)
 		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError, relayInfo)
+		retryParam.MarkChannelFailed(channel.Id)
 
 		if decision.Action != "retry" {
 			break
@@ -566,6 +567,7 @@ func executeTaskSubmissionWith(
 				taskAPIError,
 				relayInfo)
 		}
+		retryParam.MarkChannelFailed(channel.Id)
 
 		willRetry := decision.Action == "retry"
 		diagnostics.attemptFailed(retryParam.GetRetry()+1, channel, taskErr, willRetry)
@@ -806,6 +808,12 @@ func decideTaskRetry(c *gin.Context, taskErr *taskdto.TaskError, retryTimes int)
 		stop.Reason, stop.Source = "attempt_budget_exhausted", "global"
 	case service.GetChannelConstraints(c).SuppressesRetry():
 		stop.Reason, stop.Source = "pinned_channel", "channel_constraint"
+	case service.ClassifyRetryStatus(taskErr.StatusCode, taskErr.LocalError, taskErr.NoRetry) == service.RetryClassificationManual:
+		if taskErr.LocalError {
+			stop.Reason = "local_rejection"
+		} else {
+			stop.Reason = "status_not_retryable"
+		}
 	case taskErr.StatusCode == http.StatusTooManyRequests, taskErr.StatusCode == 307:
 		return retry
 	case taskErr.StatusCode/100 == 5:
