@@ -11,8 +11,11 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/golang-jwt/jwt/v5"
@@ -106,6 +109,62 @@ func TestUserAuthAllowsOpaqueDottedPAT(t *testing.T) {
 	}
 	require.NoError(t, common.Unmarshal(response.Body.Bytes(), &body))
 	assert.Equal(t, user.Id, body.ID)
+}
+
+func TestTokenAuthResolvesGroupChainWithoutCheckingSyntheticAutoGroup(t *testing.T) {
+	setupDashboardAuthMiddlewareTest(t)
+	db := model.DB
+	require.NoError(t, db.AutoMigrate(&model.Token{}, &model.GroupChain{}))
+
+	originalUsableGroups := setting.UserUsableGroups2JSONString()
+	originalGroupRatios := ratio_setting.GroupRatio2JSONString()
+	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"default":"Default","vip":"VIP"}`))
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"vip":1}`))
+	t.Cleanup(func() {
+		require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(originalUsableGroups))
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(originalGroupRatios))
+	})
+
+	user := &model.User{
+		Username:    "group-chain-token-user",
+		Password:    "password-placeholder",
+		Group:       "default",
+		Status:      common.UserStatusEnabled,
+		AuthVersion: 1,
+		AffCode:     "group-chain-token-user-aff",
+	}
+	require.NoError(t, db.Create(user).Error)
+
+	chain := &model.GroupChain{UserId: user.Id, Name: "test-chain"}
+	require.NoError(t, chain.SetGroups([]string{"default", "vip"}))
+	require.NoError(t, chain.Insert())
+	token := &model.Token{
+		UserId:         user.Id,
+		Name:           "chain-token",
+		Key:            "chainauthkey",
+		Status:         common.TokenStatusEnabled,
+		ExpiredTime:    -1,
+		UnlimitedQuota: true,
+		Group:          model.GroupChainValue(chain.Id),
+	}
+	require.NoError(t, db.Create(token).Error)
+
+	router := gin.New()
+	router.GET("/protected", TokenAuth(), func(c *gin.Context) {
+		assert.Equal(t, "auto", common.GetContextKeyString(c, constant.ContextKeyUsingGroup))
+		assert.Equal(t, "auto", common.GetContextKeyString(c, constant.ContextKeyTokenGroup))
+		groups, ok := common.GetContextKey(c, constant.ContextKeyTokenAutoGroups)
+		require.True(t, ok)
+		assert.Equal(t, []string{"default", "vip"}, groups)
+		c.Status(http.StatusNoContent)
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	request.Header.Set("Authorization", "Bearer "+token.Key)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	assert.Equal(t, http.StatusNoContent, response.Code)
 }
 
 func TestUserAuthNeverFallsBackForRecognizedInvalidInternalJWT(t *testing.T) {

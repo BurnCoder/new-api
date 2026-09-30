@@ -278,6 +278,12 @@ func GetTokenById(id int) (*Token, error) {
 }
 
 func GetTokenByKey(key string, fromDB bool) (token *Token, err error) {
+	// Most application startup paths initialize the dialect-specific column
+	// names through InitDB. Keep the lookup usable for embedded/test databases
+	// that install DB directly without going through that startup path.
+	if commonKeyCol == "" {
+		initCol()
+	}
 	if !fromDB && common.RedisEnabled {
 		// Try Redis first
 		token, err := cacheGetTokenByKey(key)
