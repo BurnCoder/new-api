@@ -152,5 +152,24 @@ func (chain *GroupChain) Update() error {
 }
 
 func DeleteUserGroupChain(id, userID int) error {
-	return DB.Where("id = ? AND user_id = ?", id, userID).Delete(&GroupChain{}).Error
+	tx := DB.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+	chainValue := GroupChainValue(id)
+	if err := tx.Model(&Token{}).
+		Where(map[string]any{"user_id": userID, "group": chainValue}).
+		Updates(map[string]any{
+			"group":             "auto",
+			"auto_groups":       "",
+			"cross_group_retry": true,
+		}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := tx.Where("id = ? AND user_id = ?", id, userID).Delete(&GroupChain{}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit().Error
 }

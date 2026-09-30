@@ -461,7 +461,7 @@ export function GroupChainsDialog({
             <AlertDialogTitle>{t('Delete group chain?')}</AlertDialogTitle>
             <AlertDialogDescription>
               {t(
-                'This chain is used by {{count}} API keys. Deleting it will make those keys unavailable until they are reassigned.',
+                'This chain is used by {{count}} API keys. Deleting it will move those keys to automatic group selection.',
                 { count: deletingChain?.token_count ?? 0 }
               )}{' '}
               <span className='font-medium'>{deletingChain?.name}</span>

@@ -63,4 +63,16 @@ func TestGroupChainCRUDAndTokenCount(t *testing.T) {
 	assert.Equal(t, "Updated fallback", updated.Name)
 	assert.Equal(t, []string{"default", "vip"}, updated.Groups)
 	assert.Equal(t, int64(1), updated.TokenCount)
+
+	deleteCtx, deleteRecorder := newTokenAutoGroupsAuthenticatedContext(
+		t, http.MethodDelete, "/api/user/group_chains/"+strconv.Itoa(created.Id), nil, user.Id,
+	)
+	deleteCtx.Params = append(deleteCtx.Params, gin.Param{Key: "id", Value: strconv.Itoa(created.Id)})
+	DeleteGroupChain(deleteCtx)
+	deleteResponse := decodeAPIResponse(t, deleteRecorder)
+	require.True(t, deleteResponse.Success, deleteResponse.Message)
+	var migrated model.Token
+	require.NoError(t, model.DB.First(&migrated, token.Id).Error)
+	assert.Equal(t, "auto", migrated.Group)
+	assert.True(t, migrated.CrossGroupRetry)
 }
