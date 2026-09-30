@@ -24,6 +24,10 @@ import { parseQuotaFromDollars, quotaUnitsToDollars } from '@/lib/format'
 import { DEFAULT_GROUP } from '../constants'
 import type { ApiKey, ApiKeyFormData } from '../types'
 
+export function isGroupChainValue(value?: string): boolean {
+  return typeof value === 'string' && value.startsWith('chain:')
+}
+
 // ============================================================================
 // Form Schema
 // ============================================================================
@@ -156,7 +160,10 @@ export function transformFormDataToPayload(
       data.group === 'auto' && data.auto_groups_mode === 'custom'
         ? data.auto_groups
         : [],
-    cross_group_retry: data.group === 'auto' ? !!data.cross_group_retry : false,
+    cross_group_retry:
+      data.group === 'auto' || isGroupChainValue(data.group)
+        ? !!data.cross_group_retry
+        : false,
   }
 }
 

@@ -83,6 +83,7 @@ import {
   getApiKeyFormDefaultValues,
   transformFormDataToPayload,
   transformApiKeyToFormDefaults,
+  isGroupChainValue,
 } from '../lib'
 import type { ApiKey } from '../types'
 import {
@@ -159,7 +160,7 @@ export function ApiKeysMutateDrawer({
   })
 
   const models = modelsData?.data || []
-  const groups = useMemo<ApiKeyGroupOption[]>(
+  const baseGroups = useMemo<ApiKeyGroupOption[]>(
     () =>
       Object.entries(groupsData?.data || {}).map(([key, info]) => ({
         value: key,
@@ -169,10 +170,26 @@ export function ApiKeysMutateDrawer({
       })),
     [groupsData]
   )
-  const backendHasAuto = groups.some((g) => g.value === 'auto')
+  const chainOptions = useMemo<ApiKeyGroupOption[]>(
+    () =>
+      (autoGroupsData?.data?.chains || []).map((chain) => ({
+        value: chain.value,
+        label: chain.name,
+        desc: chain.groups.join(' → '),
+      })),
+    [autoGroupsData]
+  )
+  const groups = useMemo(
+    () => [...baseGroups, ...chainOptions],
+    [baseGroups, chainOptions]
+  )
+  const backendHasAuto = baseGroups.some((g) => g.value === 'auto')
   const availableAutoGroupNames = useMemo(
-    () => groups.filter((group) => group.value !== 'auto').map((g) => g.value),
-    [groups]
+    () =>
+      baseGroups
+        .filter((group) => group.value !== 'auto')
+        .map((g) => g.value),
+    [baseGroups]
   )
   const globalAutoGroups = useMemo(() => {
     const available = new Set(availableAutoGroupNames)
@@ -428,7 +445,7 @@ export function ApiKeysMutateDrawer({
                         value={field.value}
                         onValueChange={(group) => {
                           field.onChange(group)
-                          if (group === 'auto') {
+                          if (group === 'auto' || isGroupChainValue(group)) {
                             form.setValue('cross_group_retry', true, {
                               shouldDirty: true,
                             })

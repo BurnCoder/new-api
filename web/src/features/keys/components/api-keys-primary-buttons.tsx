@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ChevronDown, Globe, Plus } from 'lucide-react'
+import { ChevronDown, Globe, Link2, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
@@ -112,6 +112,14 @@ export function ApiKeysPrimaryButtons() {
           )}
         </PopoverContent>
       </Popover>
+      <Button
+        variant='outline'
+        size='sm'
+        onClick={() => setOpen('group-chains')}
+      >
+        <Link2 className='h-4 w-4' />
+        {t('Group chains')}
+      </Button>
       <Button size='sm' onClick={() => setOpen('create')}>
         <Plus className='h-4 w-4' />
         {t('Create API Key')}

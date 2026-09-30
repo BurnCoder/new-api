@@ -99,6 +99,30 @@ export interface ApiKeyFormData {
 export interface TokenAutoGroupsConfig {
   groups: string[]
   max_count: number
+  chains?: GroupChainSummary[]
+}
+
+export interface GroupChainSummary {
+  id: number
+  name: string
+  value: string
+  groups: string[]
+}
+
+export interface GroupChain {
+  id: number
+  user_id: number
+  name: string
+  groups: string[]
+  token_count: number
+  created_time: number
+  updated_time: number
+}
+
+export interface GroupChainsResponse {
+  items: GroupChain[]
+  total: number
+  limit: number
 }
 
 // ============================================================================
@@ -111,3 +135,4 @@ export type ApiKeysDialogType =
   | 'delete'
   | 'batch-delete'
   | 'cc-switch'
+  | 'group-chains'

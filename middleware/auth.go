@@ -454,6 +454,34 @@ func TokenAuth() func(c *gin.Context) {
 
 		userGroup := userCache.Group
 		tokenGroup := token.Group
+		if chainID, isChain := model.ParseGroupChainValue(tokenGroup); isChain {
+			chain, chainErr := model.GetUserGroupChain(chainID, token.UserId)
+			if chainErr != nil {
+				abortWithOpenAiMessage(c, http.StatusForbidden, "分组链不存在或已被删除")
+				return
+			}
+			chainGroups, groupsErr := chain.GetGroups()
+			if groupsErr != nil || len(chainGroups) == 0 {
+				abortWithOpenAiMessage(c, http.StatusForbidden, "分组链没有可用分组")
+				return
+			}
+			usableGroups := service.GetUserUsableGroups(userGroup)
+			for _, group := range chainGroups {
+				if _, usable := usableGroups[group]; !usable || !ratio_setting.ContainsGroupRatio(group) {
+					abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("分组链包含不可用分组 %s", group))
+					return
+				}
+			}
+			// Resolve the reusable chain to the existing AutoGroups execution path.
+			// The token row still retains its chain:<id> value for management APIs.
+			tokenGroup = "auto"
+			token.Group = "auto"
+			token.CrossGroupRetry = true
+			if err := token.SetAutoGroups(chainGroups); err != nil {
+				abortWithOpenAiMessage(c, http.StatusInternalServerError, "无法解析分组链")
+				return
+			}
+		}
 		if tokenGroup != "" {
 			// check common.UserUsableGroups[userGroup]
 			if _, ok := service.GetUserUsableGroups(userGroup)[tokenGroup]; !ok {

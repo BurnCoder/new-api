@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
@@ -127,6 +128,42 @@ func setTokenAutoGroups(c *gin.Context, token *model.Token, groups []string) boo
 	return true
 }
 
+func validateTokenGroupChain(c *gin.Context, groupValue string) bool {
+	chainID, ok := model.ParseGroupChainValue(groupValue)
+	if !ok {
+		common.ApiErrorMsg(c, "无效的分组链")
+		return false
+	}
+	chain, err := model.GetUserGroupChain(chainID, c.GetInt("id"))
+	if err != nil {
+		common.ApiErrorMsg(c, "分组链不存在或无权访问")
+		return false
+	}
+	groups, err := chain.GetGroups()
+	if err != nil {
+		common.ApiError(c, err)
+		return false
+	}
+	userGroup, err := getTokenRequestUserGroup(c)
+	if err != nil {
+		common.ApiError(c, err)
+		return false
+	}
+	configured := ratio_setting.GetGroupRatioCopy()
+	usable := service.GetUserUsableGroups(userGroup)
+	for _, group := range groups {
+		if _, ok := usable[group]; !ok {
+			common.ApiErrorMsg(c, fmt.Sprintf("无权访问 %s 分组", group))
+			return false
+		}
+		if _, ok := configured[group]; !ok {
+			common.ApiErrorMsg(c, fmt.Sprintf("分组 %s 已被弃用", group))
+			return false
+		}
+	}
+	return true
+}
+
 func GetAllTokens(c *gin.Context) {
 	userId := c.GetInt("id")
 	pageInfo := common.GetPageQuery(c)
@@ -179,9 +216,29 @@ func GetTokenAutoGroups(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	chains, err := model.GetUserGroupChains(c.GetInt("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	chainItems := make([]gin.H, 0, len(chains))
+	for _, chain := range chains {
+		groups, err := chain.GetGroups()
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		chainItems = append(chainItems, gin.H{
+			"id":     chain.Id,
+			"name":   chain.Name,
+			"value":  model.GroupChainValue(chain.Id),
+			"groups": groups,
+		})
+	}
 	common.ApiSuccess(c, gin.H{
 		"groups":    service.GetUserAutoGroup(userGroup),
 		"max_count": setting.GetMaxTokenAutoGroups(),
+		"chains":    chainItems,
 	})
 }
 
@@ -315,7 +372,13 @@ func AddToken(c *gin.Context) {
 		})
 		return
 	}
-	if token.Group == "auto" {
+	if _, isChain := model.ParseGroupChainValue(token.Group); isChain {
+		if !validateTokenGroupChain(c, token.Group) {
+			return
+		}
+		token.CrossGroupRetry = true
+		_ = token.SetAutoGroups(nil)
+	} else if token.Group == "auto" {
 		if !setTokenAutoGroups(c, &token, request.AutoGroups.Groups) {
 			return
 		}
@@ -439,7 +502,13 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.AllowIps = token.AllowIps
 		cleanToken.Group = token.Group
 		cleanToken.CrossGroupRetry = token.CrossGroupRetry
-		if token.Group != "auto" {
+		if _, isChain := model.ParseGroupChainValue(token.Group); isChain {
+			if !validateTokenGroupChain(c, token.Group) {
+				return
+			}
+			cleanToken.CrossGroupRetry = true
+			_ = cleanToken.SetAutoGroups(nil)
+		} else if token.Group != "auto" {
 			cleanToken.CrossGroupRetry = false
 			_ = cleanToken.SetAutoGroups(nil)
 		} else if request.AutoGroups.Set {
