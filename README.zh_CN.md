@@ -240,25 +240,37 @@ docker compose logs -f new-api
 
 后端使用 Go 和 Gin；控制台使用 React 19、TypeScript、Rsbuild、TanStack 与 Tailwind CSS 4。前端依赖和脚本使用 Bun；Go 语言基线见 [go.mod](./go.mod)，容器构建工具链见 [Dockerfile](./Dockerfile)。
 
-后端会嵌入 `web/dist`，首次启动前先构建前端：
+本地开发默认不构建 new-api 镜像。Docker 只启动 PostgreSQL 和 Redis，Go 后端与前端直接使用工作区源码运行：
 
 ```bash
-# 仓库根目录
-cd web
-bun install --frozen-lockfile
-bun run build
-cd ..
-go run .
+# 仓库根目录；已有 Node/npm 时无需安装 Bun
+# brew install bun
+make dev-local
 ```
 
-在另一个终端启动前端开发服务器：
+`make dev-local` 会启动 PostgreSQL（`127.0.0.1:55432`）和 Redis（`127.0.0.1:56379`）容器，然后并行运行 `go run .` 和 Rsbuild dev server。Go 修改由重新编译自动生效，前端修改由 HMR 生效，不需要执行 Docker build。默认优先使用 Bun；只有 Node/npm 时会自动回退到 npm。
+
+如果希望分开调试，也可以使用两个终端：
 
 ```bash
-cd web
-bun run dev -- --port 5173
+# 终端一：基础设施 + Go 后端
+make dev-infra
+./scripts/dev-api-local.sh
+
+# 终端二：前端
+./scripts/dev-web-local.sh
 ```
 
-访问 [http://localhost:5173](http://localhost:5173)，开发服务器会将 API 请求代理到 3000 端口的后端。需要容器化开发后端时，参阅 [docker-compose.dev.yml](./docker-compose.dev.yml) 和 [makefile](./makefile) 中的 `make dev`。
+如果需要修改源码后端端口，启动前端时同步指定代理地址，例如：
+
+```bash
+PORT=3200 ./scripts/dev-api-local.sh
+DEV_API_URL=http://127.0.0.1:3200 ./scripts/dev-web-local.sh
+```
+
+可用 `DEV_POSTGRES_PORT` 和 `DEV_REDIS_PORT` 覆盖宿主机映射端口；如果使用 Node/npm，可设置 `DEV_WEB_RUNTIME=npm`。
+
+访问 [http://localhost:5173](http://localhost:5173)，开发服务器默认将 API 请求代理到源码后端的 3100 端口。需要容器化开发后端时，参阅 [docker-compose.dev.yml](./docker-compose.dev.yml) 和 [makefile](./makefile) 中的 `make dev-docker`。
 
 | 目录 | 职责 |
 | --- | --- |

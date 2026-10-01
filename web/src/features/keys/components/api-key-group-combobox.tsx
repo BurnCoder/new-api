@@ -188,11 +188,11 @@ export function ApiKeyGroupCombobox({
                       )}
                     />
                     <span className='min-w-0 flex-1'>
-                      <span className='block truncate font-medium'>
+                      <span className='block break-words font-medium'>
                         {option.label}
                       </span>
                       {option.desc && (
-                        <span className='text-muted-foreground block truncate text-xs'>
+                        <span className='text-muted-foreground block whitespace-normal break-words text-xs'>
                           {option.desc}
                         </span>
                       )}

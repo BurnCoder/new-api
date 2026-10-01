@@ -454,6 +454,7 @@ func TokenAuth() func(c *gin.Context) {
 
 		userGroup := userCache.Group
 		tokenGroup := token.Group
+		resolvedGroupChain := false
 		if chainID, isChain := model.ParseGroupChainValue(tokenGroup); isChain {
 			chain, chainErr := model.GetUserGroupChain(chainID, token.UserId)
 			if chainErr != nil {
@@ -477,16 +478,21 @@ func TokenAuth() func(c *gin.Context) {
 			tokenGroup = "auto"
 			token.Group = "auto"
 			token.CrossGroupRetry = true
+			resolvedGroupChain = true
 			if err := token.SetAutoGroups(chainGroups); err != nil {
 				abortWithOpenAiMessage(c, http.StatusInternalServerError, "无法解析分组链")
 				return
 			}
 		}
 		if tokenGroup != "" {
-			// check common.UserUsableGroups[userGroup]
-			if _, ok := service.GetUserUsableGroups(userGroup)[tokenGroup]; !ok {
-				abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("无权访问 %s 分组", tokenGroup))
-				return
+			// A chain is validated against each real group above, then uses the
+			// existing Auto execution path. Its synthetic "auto" value is not a
+			// user-selectable group and must not be checked as one.
+			if !resolvedGroupChain {
+				if _, ok := service.GetUserUsableGroups(userGroup)[tokenGroup]; !ok {
+					abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("无权访问 %s 分组", tokenGroup))
+					return
+				}
 			}
 			// check group in common.GroupRatio
 			if !ratio_setting.ContainsGroupRatio(tokenGroup) {

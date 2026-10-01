@@ -69,7 +69,18 @@ function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
         return {
           data: {
             success: true,
-            data: { groups: ['vip', 'default'], max_count: 3 },
+            data: {
+              groups: ['vip', 'default'],
+              max_count: 3,
+              chains: [
+                {
+                  id: 1,
+                  name: 'Saved fallback chain',
+                  value: 'chain:1',
+                  groups: ['vip', 'default'],
+                },
+              ],
+            },
           },
         }
       default:
@@ -115,7 +126,18 @@ async function renderCreateDrawer(): Promise<void> {
     ['token-auto-groups'],
     {
       success: true,
-      data: { groups: ['vip', 'default'], max_count: 3 },
+      data: {
+        groups: ['vip', 'default'],
+        max_count: 3,
+        chains: [
+          {
+            id: 1,
+            name: 'Saved fallback chain',
+            value: 'chain:1',
+            groups: ['vip', 'default'],
+          },
+        ],
+      },
     },
     { updatedAt: freshAt }
   )
@@ -204,6 +226,21 @@ afterEach(() => {
 })
 
 describe('API keys mutate drawer Auto group integration', () => {
+  test('lists reusable group chains before ordinary groups', async () => {
+    const createdPayloads: Array<Record<string, unknown>> = []
+    installApiFixtures(createdPayloads)
+    await renderCreateDrawer()
+
+    const groupTrigger = getControlByLabel('Group')
+    fireEvent.click(groupTrigger)
+
+    const options = [
+      ...document.querySelectorAll<HTMLElement>('[data-slot="command-item"]'),
+    ]
+    expect(options[0]).toHaveTextContent('Saved fallback chain')
+    expect(options[1]).toHaveTextContent('Automatic routing')
+  })
+
   test('inherits the root Auto order and sends an empty override for every batch-created key', async () => {
     const createdPayloads: Array<Record<string, unknown>> = []
     installApiFixtures(createdPayloads)

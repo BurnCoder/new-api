@@ -30,6 +30,7 @@ import { getCurrencyDisplay } from '@/lib/currency'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
+import { getTokenAutoGroups } from '../api'
 import { API_KEY_STATUSES } from '../constants'
 import type { ApiKey } from '../types'
 import { ApiKeyGroupCell } from './api-key-group-cell'
@@ -46,6 +47,7 @@ import {
 import { DataTableRowActions } from './data-table-row-actions'
 
 const EMPTY_GROUP_RATIOS: Record<string, number | string> = {}
+const EMPTY_GROUP_CHAIN_NAMES: Record<string, string> = {}
 
 function useGroupRatios(): Record<string, number | string> {
   const { data } = useQuery({
@@ -67,12 +69,29 @@ function useGroupRatios(): Record<string, number | string> {
   return data ?? EMPTY_GROUP_RATIOS
 }
 
+function useGroupChainNames(): Record<string, string> {
+  const { data } = useQuery({
+    queryKey: ['token-auto-groups'],
+    queryFn: async () => requireServerSuccess(await getTokenAutoGroups()),
+    staleTime: 0,
+    select: (res) => {
+      if (!res.success || !res.data?.chains) return {}
+      return Object.fromEntries(
+        res.data.chains.map((chain) => [chain.value, chain.name])
+      )
+    },
+  })
+
+  return data ?? EMPTY_GROUP_CHAIN_NAMES
+}
+
 export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
   const { t, i18n } = useTranslation()
   useSystemConfigStore((state) => state.config.currency)
   const { meta: currency } = getCurrencyDisplay()
   const quotaUnit = currency.kind === 'tokens' ? t('Tokens') : currency.symbol
   const groupRatios = useGroupRatios()
+  const groupChainNames = useGroupChainNames()
   const shouldReduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const justNowLabel = t('Just now')
@@ -157,6 +176,7 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
           return (
             <ApiKeyGroupCell
               group={group}
+              displayGroup={groupChainNames[group]}
               ratio={groupRatios[group]}
               crossGroupRetry={apiKey.cross_group_retry}
               shouldReduceMotion={shouldReduceMotion}
@@ -233,6 +253,15 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
         meta: { pinned: 'right' as const },
       },
     ],
-    [t, quotaUnit, now, groupRatios, shouldReduceMotion, locale, justNowLabel]
+    [
+      t,
+      quotaUnit,
+      now,
+      groupRatios,
+      groupChainNames,
+      shouldReduceMotion,
+      locale,
+      justNowLabel,
+    ]
   )
 }

@@ -225,7 +225,7 @@ export function GroupChainsDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className='max-w-2xl'>
+        <DialogContent className='w-[calc(100%-2rem)] !max-w-4xl'>
           <DialogHeader>
             <DialogTitle className='flex items-center gap-2'>
               <Link2 className='size-4' />
@@ -290,7 +290,9 @@ export function GroupChainsDialog({
               >
                 <div className='min-w-0 flex-1'>
                   <div className='flex items-center gap-2'>
-                    <span className='truncate font-medium'>{chain.name}</span>
+                    <span className='min-w-0 break-words font-medium'>
+                      {chain.name}
+                    </span>
                     <span className='text-muted-foreground shrink-0 text-xs'>
                       {chain.groups.length} {t('groups')}
                     </span>
@@ -301,7 +303,7 @@ export function GroupChainsDialog({
                     )}
                   </div>
                   <p
-                    className='text-muted-foreground mt-1 truncate text-xs'
+                    className='text-muted-foreground mt-1 whitespace-normal break-words text-xs'
                     title={chain.groups.join(' → ')}
                   >
                     {chain.groups.join(' → ')}
