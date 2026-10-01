@@ -6,9 +6,13 @@ DEV_POSTGRES_SERVICE = postgres
 DEV_API_SERVICE = new-api
 DEV_POSTGRES_DB = new-api
 DEV_POSTGRES_USER = root
+DEV_POSTGRES_PORT ?= 55432
+DEV_REDIS_PORT ?= 56379
 DEV_SQLITE_PATH ?= one-api.db
+DEV_API_URL ?= http://127.0.0.1:3100
+DEV_WEB_RUNTIME ?= auto
 
-.PHONY: all build-web build-all-web start-api dev dev-api dev-api-rebuild dev-web reset-setup test
+.PHONY: all build-web build-all-web start-api dev dev-local dev-docker dev-infra dev-infra-down dev-api dev-api-local dev-api-rebuild dev-web dev-web-local reset-setup test
 
 all: build-all-web start-api
 
@@ -37,7 +41,26 @@ dev-web:
 	@cd $(WEB_DIR) && bun install
 	@cd $(WEB_DIR) && bun run dev -- --host 0.0.0.0 --port $(DEV_WEB_PORT)
 
-dev: dev-api dev-web
+dev-web-local:
+	@DEV_WEB_PORT="$(DEV_WEB_PORT)" DEV_API_URL="$(DEV_API_URL)" DEV_WEB_RUNTIME="$(DEV_WEB_RUNTIME)" ./scripts/dev-web-local.sh
+
+dev: dev-local
+
+# Fast local loop: only PostgreSQL/Redis run in Docker. Source changes are
+# picked up by go run and the Rsbuild dev server without rebuilding an image.
+dev-local: dev-infra
+	@$(MAKE) -j2 dev-api-local dev-web-local
+
+dev-docker: dev-api dev-web
+
+dev-infra:
+	@DEV_POSTGRES_PORT="$(DEV_POSTGRES_PORT)" DEV_REDIS_PORT="$(DEV_REDIS_PORT)" docker compose -f $(DEV_COMPOSE_FILE) up -d $(DEV_POSTGRES_SERVICE) redis
+
+dev-infra-down:
+	@docker compose -f $(DEV_COMPOSE_FILE) down
+
+dev-api-local: dev-infra
+	@./scripts/dev-api-local.sh
 
 # The main package embeds the ignored web/dist output and is covered after build-web.
 test:
